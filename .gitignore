@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+backend/venv/
+venv/
+env/
+
+# Environment secrets — never commit these
+backend/.env
+.env
+
+# SQLite database (local dev only)
+backend/raidfun.db
+*.db
+*.sqlite
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log

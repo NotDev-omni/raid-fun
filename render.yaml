@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: raid-fun-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MOCK_MODE
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: "https://REPLACE_WITH_YOUR_NETLIFY_URL.netlify.app"
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        value: "https://REPLACE_WITH_YOUR_RENDER_URL.onrender.com/auth/discord/callback"
+      - key: X_CLIENT_ID
+        sync: false
+      - key: X_CLIENT_SECRET
+        sync: false
+      - key: X_REDIRECT_URI
+        value: "https://REPLACE_WITH_YOUR_RENDER_URL.onrender.com/auth/x/callback"
+      - key: DATABASE_URL
+        value: "sqlite:///./raidfun.db"

@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-dotenv
+httpx
+pyjwt
+apscheduler
+twscrape
+python-multipart
+websockets

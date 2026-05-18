@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><title>Auth Test</title></head>
+<body style="font-family:monospace;padding:20px;background:#111;color:#0f0">
+<h2>Backend: <span id="status">checking...</span></h2>
+<pre id="detail"></pre>
+<button onclick="doLogin()" style="padding:10px 20px;font-size:16px;cursor:pointer">LOGIN WITH DISCORD</button>
+<script>
+async function testBackend() {
+  try {
+    const r = await fetch('http://localhost:8000/health');
+    const d = await r.json();
+    document.getElementById('status').textContent = 'OK ✓';
+    document.getElementById('detail').textContent = JSON.stringify(d, null, 2);
+  } catch(e) {
+    document.getElementById('status').textContent = 'OFFLINE ✗ — ' + e.message;
+    document.getElementById('status').style.color = 'red';
+  }
+}
+function doLogin() {
+  window.location.href = 'http://localhost:8000/auth/discord';
+}
+testBackend();
+</script>
+</body>
+</html>

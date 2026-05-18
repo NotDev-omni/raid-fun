@@ -1,0 +1,17 @@
+{
+  "name": "raid-fun // idol64",
+  "short_name": "raid-fun",
+  "description": "raid. earn. grind.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0a1b",
+  "theme_color": "#0d0a1b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%230d0a1b'/><text y='140' x='20' font-size='120' font-family='monospace' fill='%2358dbff'>R</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

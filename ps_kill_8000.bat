@@ -1,0 +1,9 @@
+@echo off
+echo Finding and killing process on port 8000...
+powershell -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ('Killing PID ' + $_.OwningProcess); Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+echo Done. Waiting 2 seconds...
+timeout /t 2 /nobreak >nul
+echo Starting backend on port 8000...
+cd /d "%~dp0backend"
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+pause
