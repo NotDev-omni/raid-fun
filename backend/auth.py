@@ -18,8 +18,8 @@ from models import User, GrindTransaction
 from schemas import UserMe, SetHandleRequest, SetHandleResponse, VerifyHandleResponse
 
 # ── PKCE state store (in-memory; fine for single-process dev server) ──────────
-# Maps  state_token -> code_verifier  for X OAuth flows in progress.
-_x_oauth_states: dict[str, str] = {}
+# Maps  state_token -> {"verifier": str, "discord_user_id": int|None}
+_x_oauth_states: dict[str, dict] = {}
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -218,9 +218,26 @@ def discord_callback(code: str = Query(...), db: Session = Depends(get_db)):
         user.discord_avatar = discord_avatar
 
     db.flush()
-    jwt_token = create_jwt(user.id)
 
-    return RedirectResponse(f"{config.FRONTEND_URL}/?token={jwt_token}")
+    # Instead of sending the user back to the frontend, chain straight into X OAuth
+    # so they authenticate with X automatically — no manual tweet verification needed.
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    state = secrets.token_urlsafe(16)
+    _x_oauth_states[state] = {"verifier": code_verifier, "discord_user_id": user.id}
+
+    params = urlencode({
+        "response_type": "code",
+        "client_id": config.X_CLIENT_ID,
+        "redirect_uri": config.X_REDIRECT_URI,
+        "scope": "tweet.read users.read",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    })
+    return RedirectResponse(f"{config.X_AUTH_URL}?{params}")
 
 
 @router.get("/me", response_model=UserMe)
@@ -315,7 +332,7 @@ def x_login():
         hashlib.sha256(code_verifier.encode()).digest()
     ).rstrip(b"=").decode()
     state = secrets.token_urlsafe(16)
-    _x_oauth_states[state] = code_verifier
+    _x_oauth_states[state] = {"verifier": code_verifier, "discord_user_id": None}
 
     params = urlencode({
         "response_type": "code",
@@ -337,9 +354,11 @@ def x_callback(
 ):
     """Exchange X OAuth2 code for access token, create/update user, return JWT."""
     # Validate PKCE state
-    code_verifier = _x_oauth_states.pop(state, None)
-    if not code_verifier:
+    state_data = _x_oauth_states.pop(state, None)
+    if not state_data:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    code_verifier = state_data["verifier"]
+    discord_user_id = state_data.get("discord_user_id")
 
     # Exchange code for access token
     try:
@@ -391,42 +410,10 @@ def x_callback(
     # Strip Twitter's _normal suffix to get a larger avatar
     x_avatar = x_avatar_raw.replace("_normal", "") if x_avatar_raw else None
 
-    # Upsert: look up by x_id first
-    user = db.query(User).filter(User.x_id == x_id).first()
-    is_new = user is None
+    # ── Case 1: Discord→X linking flow ───────────────────────────────────────
+    if discord_user_id:
+        discord_user = db.query(User).filter(User.id == discord_user_id).first()
+        if not discord_user:
+            raise HTTPException(status_code=404, detail="Discord user not found")
 
-    if is_new:
-        # If a Discord-authed user already claimed this handle, link it
-        existing_by_handle = (
-            db.query(User)
-            .filter(User.x_handle == x_username, User.x_id.is_(None))
-            .first()
-        )
-        if existing_by_handle:
-            # Attach the X identity to their existing account
-            user = existing_by_handle
-            user.x_id = x_id
-            user.x_handle_verified = True
-            if x_avatar:
-                user.x_avatar = x_avatar
-        else:
-            # Brand-new user via X
-            user = User(
-                x_id=x_id,
-                x_handle=x_username,
-                x_handle_verified=True,
-                x_avatar=x_avatar,
-            )
-            db.add(user)
-            db.flush()
-            award_grind(db, user, 20, "signup_bonus", "Welcome bonus for joining raid-fun!")
-    else:
-        # Returning X user — refresh handle and avatar
-        user.x_handle = x_username
-        user.x_handle_verified = True
-        if x_avatar:
-            user.x_avatar = x_avatar
-
-    db.flush()
-    jwt_token = create_jwt(user.id)
-    return RedirectResponse(f"{config.FRONTEND_URL}/?token={jwt_token}")
+        # Check if this X account is al
