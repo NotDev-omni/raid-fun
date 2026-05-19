@@ -1,6 +1,10 @@
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-// API_BASE is set by config.js (auto-detects local vs production)
-const API_BASE = window.RAID_API || 'http://localhost:8000'
+// In production (same-origin deploy), use window.location.origin.
+// In local dev (localhost:5500), fall back to the local backend on port 8000.
+const API_BASE = window.RAID_API ||
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : window.location.origin)
 
 // ─── RANK DEFINITIONS ────────────────────────────────────────────────────────
 const RANKS = [

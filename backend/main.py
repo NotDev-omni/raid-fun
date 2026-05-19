@@ -1,8 +1,11 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import config
@@ -120,3 +123,14 @@ async def websocket_endpoint(
         logger.warning("WebSocket error for user_id=%s: %s", user_id, exc)
     finally:
         ws_manager.disconnect(websocket, user_id)
+
+
+# ── Frontend static files ─────────────────────────────────────────────────────
+# Serve the frontend SPA. Must come AFTER all API routes so they take priority.
+_frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
+
+if os.path.isdir(_frontend_dir):
+    # Serve individual asset files (style.css, app.js, sw.js, manifest.json …)
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+else:
+    logger.warning("Frontend directory not found at %s — skipping static mount", _frontend_dir)
