@@ -218,9 +218,10 @@ def discord_callback(code: str = Query(...), db: Session = Depends(get_db)):
         user.discord_avatar = discord_avatar
 
     db.flush()
+    db.commit()  # Ensure the user is persisted before redirecting to X OAuth
 
     # Instead of sending the user back to the frontend, chain straight into X OAuth
-    # so they authenticate with X automatically — no manual tweet verification needed.
+    # so they authenticate with X automatically — no more manual tweet verification.
     code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
     code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode()).digest()
@@ -416,4 +417,60 @@ def x_callback(
         if not discord_user:
             raise HTTPException(status_code=404, detail="Discord user not found")
 
-        # Check if this X account is al
+        # Check if this X account is already linked to a different user
+        existing_x = db.query(User).filter(User.x_id == x_id, User.id != discord_user_id).first()
+        if existing_x:
+            # X account belongs to someone else — just log in as that X user instead
+            user = existing_x
+            user.x_handle = x_username
+            user.x_handle_verified = True
+            if x_avatar:
+                user.x_avatar = x_avatar
+        else:
+            # Link X account to the Discord user
+            discord_user.x_id = x_id
+            discord_user.x_handle = x_username
+            discord_user.x_handle_verified = True
+            if x_avatar:
+                discord_user.x_avatar = x_avatar
+            user = discord_user
+
+    # ── Case 2: Standalone X login ────────────────────────────────────────────
+    else:
+        user = db.query(User).filter(User.x_id == x_id).first()
+        is_new = user is None
+
+        if is_new:
+            # If a Discord-authed user already claimed this handle, link it
+            existing_by_handle = (
+                db.query(User)
+                .filter(User.x_handle == x_username, User.x_id.is_(None))
+                .first()
+            )
+            if existing_by_handle:
+                user = existing_by_handle
+                user.x_id = x_id
+                user.x_handle_verified = True
+                if x_avatar:
+                    user.x_avatar = x_avatar
+            else:
+                # Brand-new user via X
+                user = User(
+                    x_id=x_id,
+                    x_handle=x_username,
+                    x_handle_verified=True,
+                    x_avatar=x_avatar,
+                )
+                db.add(user)
+                db.flush()
+                award_grind(db, user, 20, "signup_bonus", "Welcome bonus for joining raid-fun!")
+        else:
+            # Returning X user — refresh handle and avatar
+            user.x_handle = x_username
+            user.x_handle_verified = True
+            if x_avatar:
+                user.x_avatar = x_avatar
+
+    db.flush()
+    jwt_token = create_jwt(user.id)
+    return RedirectResponse(f"{config.FRONTEND_URL}/?token={jwt_token}")
